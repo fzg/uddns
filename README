@@ -1,0 +1,40 @@
+===============================================================================
+          __   __       
+ __ _____/ /__/ /__  ___
+/ // / _  / _  / _ \(_-<
+\_,_/\_,_/\_,_/_//_/___/
+                        
+===============================================================================
+- fzn - 2015 -
+Started based work by
+https://fotisl.com/blog/2011/12/creating-a-dynamic-dns-service-using-djbdns/
+
+WHAT?
+	python dynamic dns update server
+HOW?
+	https + bcrypt + sqlite
+WHY?
+	I don't like PHP; didn't find one.
+
+HOWTO?
+	Adding users?
+		uddns.py username password role
+					   [1-4; admin == 4] <- NOT IMPLEMENTED YET
+
+	GET /FUNC?u=USERNAME&p=PASSWORD[&arg=val...]
+
+	FUNCS:	[name]		[arg]
+		create4:	n
+			creates ipv4 mapping with client addr
+		update4:	n
+			updates ipv4 mapping to client addr
+		delete4:	n
+			deletes ipv4 mapping
+		dump:
+			dumps mappings
+
+TODO:
+	*Testing
+	*Cleaning/Refactoring
+	*IPv6
+	*User roles
