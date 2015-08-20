@@ -1,10 +1,30 @@
 #!/usr/bin/python3
-import bcrypt, cgi, sqlite3, ssl, sys
+import bcrypt, cgi, os, socket, sqlite3, ssl, sys
 from urllib.parse import parse_qs, urlparse
 from http.server import BaseHTTPRequestHandler,HTTPServer
 
 db="uddns.db"
 
+def updateZone():
+	ns="m00t.xyz"
+	ip=socket.gethostbyname(socket.gethostname())
+	if ip.find("127.0.") == 0:
+		print("Warning, local ip returned by gethostname()!")
+	dir="/etc/tinydns/root/"
+	e = selectAll("entries")
+	txt = "."+ns+":"+ip+":a:259200\n"
+	ips = []
+	for x  in e:
+		print(x)
+		if x[1] in ips:
+			chr = "+"			# sets an alias
+		else:
+			ips.append(x[1])
+			chr = "="			# sets a ptr
+		txt += chr+x[0]+":"+x[1]+":21600\n" 	# in seconds. 6h
+	with open(dir+"data", "w") as of:
+		of.write(txt)
+	return os.system("/usr/bin/tinydns-data")
 
 def selectAll(table, opt=""):
 		co = sqlite3.connect(db);
@@ -16,10 +36,10 @@ def selectAll(table, opt=""):
 
 #TODO: do SQL add/update/delete
 class EntryList:
-	def __init__(self, user):
+	def __init__(self, user, ul):
 		self.user = user
 		self.entries = False
-		self.getEm()
+		self.getEm(ul)
 	def get(self):
 		print('get', self.entries)
 		return self.entries;
@@ -30,9 +50,12 @@ class EntryList:
 		c.execute('''create table entries (name text, ip text, user text)''')
 		co.commit()
 		co.close()
-	def getEm(self):
+	def getEm(self, ul):
 		try:
-			self.entries = selectAll("entries", "where user like '"+self.user+"'")
+			s = "where user like '"+self.user+"'"
+			if (ul == 4):
+				s = ""
+			self.entries = selectAll("entries", s)
 			print(' self.entries', self.entries)
 		except sqlite3.OperationalError as e:
 			print("error", e)
@@ -52,6 +75,13 @@ class EntryList:
 		co.commit()
 		co.close()
 		return 1
+	def chown(self,name, user):
+		co = sqlite3.connect(db);
+		c = co.cursor()
+		c.execute('''update entries set user = ? where name like ?''', [user, name])
+		co.commit()
+		co.close()
+		return 1
 	def dlt(self, name):
 		co = sqlite3.connect(db);
 		c = co.cursor()
@@ -65,7 +95,7 @@ class User:
 		self.ul = ulevel
 		self.ip = ip
 		print("user", user)
-		self.el = EntryList(user)
+		self.el = EntryList(user, ulevel)
 		self.e = self.el.get()
 		print('self.e', self.e)
 	ulevels = {
@@ -76,6 +106,7 @@ class User:
 	}
 	def cmd(self, c, args):
 		try:
+			print("cmdinside", c)
 			a = self.fundict[c]
 		except KeyError:
 			return False
@@ -86,9 +117,12 @@ class User:
 			nn = n["n"][0]
 		except KeyError:
 			return "vbad"
-		for x in self.e:
-			if (nn == x[0]):
-				return "bad"
+		if self.e:
+			for x in self.e:
+				if (nn == x[0]):
+					return "bad"
+		if self.ul < 2:
+			return "ask"
 		self.el.add(nn, self.ip[0],self.u)
 		return "good"
 	def update4(self, n):
@@ -101,32 +135,55 @@ class User:
 		for x in self.e:
 			print("xo", x[0], nn)
 			if x[0] == nn:
-				self.el.upd(nn, self.ip[0])
-				return "good"
+				if (self.ul == 4 or self.u == x[2]):
+					self.el.upd(nn, self.ip[0])
+					return "good"
 		return "bad"
 	def delete4(self, n):
 		try:
 			nn = n["n"][0]
+			print(nn)
 		except KeyError:
 			return "vbad"
 		if ((self.e != None)):
 			for x in self.e:
 				if x[0] == nn:
-					self.el.dlt(nn)
-					break
-		return "good"
+					if (self.ul == 4 or self.u == x[2] and self.ul > 1):
+						self.el.dlt(nn)
+						return "good"
+		return "bad"
 	def dump(self,n):
+		print(self.ul)
+		print(self.ul ==4)
 		if (self.e == []):
 			return "(empty)"
 		s = ""
 		for x in self.e:
-			s += str(x)+'\n'
+			if (self.ul == 4 or x[2] == self.u):
+				s += str(x)+'\n'
+		if s == "":
+			s = "(empty)"
 		return s
+	def chown(self,n):
+		print("inchown!")
+		if self.ul != 4:
+			return "ask"
+		try:
+			nn = n["n"][0]
+			new = n["o"][0]
+		except KeyError:
+			return "vbad"
+		if (self.e != None):
+			for x in self.e:
+				if x[0] == nn:
+					self.el.chown(nn, new)
+					return "good"
 	fundict = {
 		'create4': [1, create4],
 		'update4': [1, update4],
 		'delete4': [1, delete4],
-		'dump':	[0, dump]
+		'dump':	[0, dump],
+		'chown': [1, chown]
 	}
 
 class Users:
@@ -149,7 +206,7 @@ class Users:
 		print("Users::create")
 		co = sqlite3.connect(db);
 		c = co.cursor()
-		c.execute('''create table users (user text, pass blob, um char)''')
+		c.execute('''create table users (user text, pass blob, um tinyint)''')
 		co.commit()
 		co.close()
 	def authorized(self, a):
@@ -188,7 +245,7 @@ def doCmd(c,a,ad):
 	if (u.authorized(a)):
 		u, ul = u.get(a)
 		cmd = User(ad, u, ul).cmd(c[1:],a)
-		if (cmd == False):
+		if (cmd == False or cmd == None):
 			return 500, "bad request"
 		print("cmd", cmd)
 		return 200, cmd
@@ -225,14 +282,16 @@ def updateRecord(d):
 	co.close()
 
 av = sys.argv
-if (len(av) > 1):
+if (len(av) > 3):
 	print("adding user")
 	u = Users();
 	hp = bcrypt.hashpw(av[2].encode("utf8"),bcrypt.gensalt())
-	u.add(av[1], hp, av[3])
-	exit(0)
+	errlvl = u.add(av[1], hp, int(av[3]))
+	exit(errlvl)
+
 if (len(av) == 1):
 	httpd = HTTPServer(('localhost', 4443), UddnsRequestHandler)
 	httpd.socket = ssl.wrap_socket(httpd.socket, certfile='./server.pem', server_side=True)
 	httpd.serve_forever()
 
+exit(updateZone())

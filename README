@@ -10,7 +10,7 @@ Started based work by
 https://fotisl.com/blog/2011/12/creating-a-dynamic-dns-service-using-djbdns/
 
 WHAT?
-	python dynamic dns update server
+	python dynamic dns update server for djbdns
 HOW?
 	https + bcrypt + sqlite
 WHY?
@@ -23,6 +23,12 @@ HOWTO?
 
 	GET /FUNC?u=USERNAME&p=PASSWORD[&arg=val...]
 
+	ROLES:
+		1: can edit its entries
+		2: can add/edit its own/delete its own entries
+		3: ???
+		4: superuser
+
 	FUNCS:	[name]		[arg]
 		create4:	n
 			creates ipv4 mapping with client addr
@@ -32,9 +38,22 @@ HOWTO?
 			deletes ipv4 mapping
 		dump:
 			dumps mappings
+		chown:
+			changes mapping owner
+	Testing:
+		 openssl req -new -x509 -keyout server.pem \
+		  -out server.pem -days 365 -nodes			#Create cert
+		 ./uddns.py user pass 4					#Add admin
+		 ./uddns.py &						#Run dameon
+		 socat openssl:localhost:4443,cafile=server.pem -	#Chat
+		 GET /create4?u=user&p=pass&n=myownname			#create record
+		 GET /dump?u=user&p=pass				#f.e. dump records
+		 ./uddns.py x						#update djbdns data file
+			(see recreate.sh for sample usage)
+
+[I know using GETs to modify data is semantically wrong]
 
 TODO:
 	*Testing
 	*Cleaning/Refactoring
 	*IPv6
-	*User roles
