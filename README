@@ -47,6 +47,7 @@ HOWTO?
 		  -out server.pem -days 365 -nodes			#Create cert
 		 ./uddns.py user pass 4					#Add admin
 		 ./uddns.py &						#Run dameon
+		# Get the cert to your clients
 		 socat openssl:localhost:4443,cafile=server.pem -	#Chat
 		 GET /create4?u=user&p=pass&n=myownname			#create record
 		 GET /dump?u=user&p=pass				#f.e. dump records
