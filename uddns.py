@@ -1,8 +1,17 @@
 #!/usr/bin/python3
-import bcrypt, cgi, os, socket, sqlite3, ssl, sys
+import os
+try:
+	import bcrypt
+except ImportError:
+	print("oops. bcrypt for python3 not found. trying to install it ourself")
+	if (os.system("pip install bcrypt") != 0):
+		print("Apparently you'll have to do it yourself. Check README ;)")
+import cgi, socket, sqlite3, ssl, subprocess, sys
 from urllib.parse import parse_qs, urlparse
 from http.server import BaseHTTPRequestHandler,HTTPServer
 
+
+bind = ['0.0.0.0', 4443]	#IP/Port to bind to
 db="uddns.db"
 
 def updateZone():
@@ -21,10 +30,11 @@ def updateZone():
 		else:
 			ips.append(x[1])
 			chr = "="			# sets a ptr
-		txt += chr+x[0]+":"+x[1]+":21600\n" 	# in seconds. 6h
+		txt += chr+x[0]+"."+ns+":"+x[1]+":21600\n" 	# in seconds. 6h
+#TODO: Possibly different classes of expiration time
 	with open(dir+"data", "w") as of:
 		of.write(txt)
-	return os.system("/usr/bin/tinydns-data")
+	return subprocess.Popen(["/usr/bin/tinydns-data"], cwd=dir)
 
 def selectAll(table, opt=""):
 		co = sqlite3.connect(db);
@@ -34,17 +44,16 @@ def selectAll(table, opt=""):
 		co.close()
 		return x
 
-#TODO: do SQL add/update/delete
+#TODO: macroize / save chars / deredundancy
 class EntryList:
 	def __init__(self, user, ul):
 		self.user = user
 		self.entries = False
 		self.getEm(ul)
 	def get(self):
-		print('get', self.entries)
 		return self.entries;
 	def create(self):
-		print("EntryList::create")
+#		print("EntryList::create")
 		co = sqlite3.connect(db);
 		c = co.cursor()
 		c.execute('''create table entries (name text, ip text, user text)''')
@@ -56,13 +65,13 @@ class EntryList:
 			if (ul == 4):
 				s = ""
 			self.entries = selectAll("entries", s)
-			print(' self.entries', self.entries)
+#			print(' self.entries', self.entries)
 		except sqlite3.OperationalError as e:
-			print("error", e)
+#			print("error", e)
 			self.create()
 	def add(self, name, ip, user):
 		co = sqlite3.connect(db);
-		print(name,ip,user)
+#		print(name,ip,user)
 		c = co.cursor()
 		c.execute('''insert into entries values (?,?,?)''', [name, ip, user])
 		co.commit()
@@ -94,10 +103,10 @@ class User:
 		self.u = user
 		self.ul = ulevel
 		self.ip = ip
-		print("user", user)
+#		print("user", user)
 		self.el = EntryList(user, ulevel)
 		self.e = self.el.get()
-		print('self.e', self.e)
+#		print('self.e', self.e)
 	ulevels = {
 		1:'simple',
 		2:'adv',
@@ -106,13 +115,11 @@ class User:
 	}
 	def cmd(self, c, args):
 		try:
-			print("cmdinside", c)
 			a = self.fundict[c]
 		except KeyError:
 			return False
 		return a[1](self, args)
 	def create4(self, n):
-		print("n", n)
 		try:
 			nn = n["n"][0]
 		except KeyError:
@@ -133,7 +140,6 @@ class User:
 		if ((self.e == None)):
 			return "bad"
 		for x in self.e:
-			print("xo", x[0], nn)
 			if x[0] == nn:
 				if (self.ul == 4 or self.u == x[2]):
 					self.el.upd(nn, self.ip[0])
@@ -142,7 +148,6 @@ class User:
 	def delete4(self, n):
 		try:
 			nn = n["n"][0]
-			print(nn)
 		except KeyError:
 			return "vbad"
 		if ((self.e != None)):
@@ -153,9 +158,7 @@ class User:
 						return "good"
 		return "bad"
 	def dump(self,n):
-		print(self.ul)
-		print(self.ul ==4)
-		if (self.e == []):
+		if (self.e == [] or self.e is False):
 			return "(empty)"
 		s = ""
 		for x in self.e:
@@ -165,7 +168,6 @@ class User:
 			s = "(empty)"
 		return s
 	def chown(self,n):
-		print("inchown!")
 		if self.ul != 4:
 			return "ask"
 		try:
@@ -190,7 +192,6 @@ class Users:
 	def __init__(self):
 		self.users = False
 		self.uu = False;
-		print("Users::init")
 		try:
 			self.getAll()
 		except sqlite3.OperationalError:
@@ -238,7 +239,6 @@ class Users:
 		return a
 
 def doCmd(c,a,ad):
-	print("doCmd", c, a, ad)
 	if (len(c) < 2):
 		return 500, "bad request"
 	u = Users();
@@ -247,7 +247,6 @@ def doCmd(c,a,ad):
 		cmd = User(ad, u, ul).cmd(c[1:],a)
 		if (cmd == False or cmd == None):
 			return 500, "bad request"
-		print("cmd", cmd)
 		return 200, cmd
 	else:
 		return 403, "forbidden"
@@ -283,15 +282,26 @@ def updateRecord(d):
 
 av = sys.argv
 if (len(av) > 3):
-	print("adding user")
+	print("adding user", av[1], "as", User.ulevels[int(av[3])])
 	u = Users();
 	hp = bcrypt.hashpw(av[2].encode("utf8"),bcrypt.gensalt())
+	if type(hp) is str:	#wierd: 2 computers, same bcrypt&&python versions, one has bytes other str
+		print("WARNING: hashing will be broken. See readme/pip install bcrypt/or fix it")
+		hp = bytes(hp,'utf8')
 	errlvl = u.add(av[1], hp, int(av[3]))
 	exit(errlvl)
 
 if (len(av) == 1):
-	httpd = HTTPServer(('localhost', 4443), UddnsRequestHandler)
-	httpd.socket = ssl.wrap_socket(httpd.socket, certfile='./server.pem', server_side=True)
+	httpd = HTTPServer((bind[0], bind[1]), UddnsRequestHandler)
+	while 42:
+		try:
+			httpd.socket = ssl.wrap_socket(httpd.socket, certfile='./server.pem', server_side=True)
+		except FileNotFoundError:
+			print("Making cert. Remember to enter FQDN")
+			os.system("openssl req -new -x509 -keyout server.pem -out server.pem -days 365 -nodes")
+			continue
+		break
+	print("Launching server")
 	httpd.serve_forever()
 
 exit(updateZone())
