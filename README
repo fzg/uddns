@@ -8,6 +8,8 @@
 - fzn - 2015 -
 Started based work by
 https://fotisl.com/blog/2011/12/creating-a-dynamic-dns-service-using-djbdns/
+See:
+http://cr.yp.to/djbdns/run-server.html
 
 WHAT?
 	python dynamic dns update server for djbdns
@@ -56,4 +58,5 @@ HOWTO?
 TODO:
 	*Testing
 	*Cleaning/Refactoring
-	*IPv6
+	*IPv6 (needs some place to test)
+	*integrate iodine functionality into djbdns? how to merge em?
