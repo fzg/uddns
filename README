@@ -60,3 +60,10 @@ TODO:
 	*Cleaning/Refactoring
 	*IPv6 (needs some place to test)
 	*integrate iodine functionality into djbdns? how to merge em?
+
+Notes:
+	built-in bcrypt from debian python3.4 doesn't go along well with this code, you might want to:
+	apt-get install python3-dev libffi-dev
+	wget https://bootstrap.pypa.io/get-pip.py
+	python3 ./get-pip.py
+	pip install bcrypt
