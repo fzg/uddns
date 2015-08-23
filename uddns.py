@@ -32,9 +32,12 @@ def updateZone():
 			chr = "="			# sets a ptr
 		txt += chr+x[0]+"."+ns+":"+x[1]+":21600\n" 	# in seconds. 6h
 #TODO: Possibly different classes of expiration time
-	with open(dir+"data", "w") as of:
-		of.write(txt)
-	return subprocess.Popen(["/usr/bin/tinydns-data"], cwd=dir)
+	try:
+		with open(dir+"data", "w") as of:
+			of.write(txt)
+		return subprocess.Popen(["/usr/bin/tinydns-data"], cwd=dir)
+	except Exception:
+		pass;
 
 def selectAll(table, opt=""):
 		co = sqlite3.connect(db);
@@ -49,6 +52,7 @@ class EntryList:
 	def __init__(self, user, ul):
 		self.user = user
 		self.entries = False
+		self.ul = ul
 		self.getEm(ul)
 	def get(self):
 		return self.entries;
@@ -98,6 +102,16 @@ class EntryList:
 		co.commit()
 		co.close()
 		return 1
+	def aur(self, user, pwd, ul): #AddUseR
+		if self.ul < 4:
+			return -1;
+		u = Users();
+		if (int(ul) > 3 or int(ul) < 1):
+			return -1;
+		hp = bcrypt.hashpw(pwd.encode("utf8"),bcrypt.gensalt())
+		u.add(user, hp, int(ul));
+		return -1;
+		
 class User:
 	def __init__(self, ip, user, ulevel):
 		self.u = user
@@ -180,12 +194,32 @@ class User:
 				if x[0] == nn:
 					self.el.chown(nn, new)
 					return "good"
+	def zupd(self,n):
+		if self.ul != 4:
+			return "ask"
+		updateZone();
+		return "done"
+#WARNING ON CHECK PAS LES DOUBLONS ;-)
+	def addu(self,n):
+		if self.ul != 4:
+			return "ask"
+		try:
+			u = n["uu"][0]
+			p = n["pp"][0]
+			l = n["l"][0]
+		except KeyError:
+			return "vbad"
+		self.el.aur(u, p, l)
+		return "good"
+
 	fundict = {
 		'create4': [1, create4],
 		'update4': [1, update4],
 		'delete4': [1, delete4],
 		'dump':	[0, dump],
-		'chown': [1, chown]
+		'chown': [1, chown],
+		'ausr': [1, addu],
+		'zud': [1,zupd]
 	}
 
 class Users:
@@ -282,6 +316,7 @@ def updateRecord(d):
 
 av = sys.argv
 if (len(av) > 3):
+
 	print("adding user", av[1], "as", User.ulevels[int(av[3])])
 	u = Users();
 	hp = bcrypt.hashpw(av[2].encode("utf8"),bcrypt.gensalt())
