@@ -11,6 +11,17 @@ https://fotisl.com/blog/2011/12/creating-a-dynamic-dns-service-using-djbdns/
 See:
 http://cr.yp.to/djbdns/run-server.html
 
+              ___
+             |___|
+           __  _  __
+          / / | | \ \
+         / /  |_|  \ \          very immature release
+        /_/   (_)   \_\		 read: known broken.
+         ___  ___  ___
+        |___| ___| ___|
+
+
+
 WHAT?
 	python dynamic dns update server for djbdns
 HOW?
@@ -42,6 +53,10 @@ HOWTO?
 			dumps mappings
 		chown:
 			changes mapping owner
+		ausr:
+			adds an user
+		zud:
+			updates zone
 	Testing:
 		 openssl req -new -x509 -keyout server.pem \
 		  -out server.pem -days 365 -nodes			#Create cert
